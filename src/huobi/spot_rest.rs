@@ -2,6 +2,7 @@ use crate::errors::*;
 use crate::huobi::types::*;
 use crate::models::*;
 use crate::utils::*;
+use crate::traits::*;
 
 use ring::{digest, hmac};
 use serde_json::Value;
@@ -44,7 +45,7 @@ impl Huobi {
         }
     }
 
-    pub fn get_symbols(&self) -> APIResult<Vec<SymbolInfo>> {
+    pub fn get_symbols_raw(&self) -> APIResult<Vec<SymbolInfo>> {
         let uri = "/v1/common/symbols";
         let ret = self.get(&uri, "")?;
         let resp: Response<Vec<RawSymbolInfo>> = serde_json::from_str(&ret)?;
@@ -189,7 +190,7 @@ impl Huobi {
             .join("&")
     }
 
-    pub fn get_orderbook(&self, symbol: &str, depth: u8) -> APIResult<Orderbook> {
+    pub fn get_orderbook_raw(&self, symbol: &str, depth: u8) -> APIResult<Orderbook> {
         let uri = "/market/depth";
         let symbol = symbol.to_lowercase();
         let params = format!("symbol={}&depth={}&type=step0", symbol, depth);
@@ -202,7 +203,7 @@ impl Huobi {
         Ok(orderbook)
     }
 
-    pub fn get_ticker(&self, symbol: &str) -> APIResult<Ticker> {
+    pub fn get_ticker_raw(&self, symbol: &str) -> APIResult<Ticker> {
         let uri = "/market/detail/merged";
         let params = format!("symbol={}", symbol.to_lowercase());
         let ret = self.get(uri, &params)?;
@@ -214,7 +215,7 @@ impl Huobi {
         Ok(ticker)
     }
 
-    pub fn get_kline(&self, symbol: &str, period: &str, limit: u16) -> APIResult<Vec<Kline>> {
+    pub fn get_kline_raw(&self, symbol: &str, period: &str, limit: u16) -> APIResult<Vec<Kline>> {
         let uri = "/market/history/kline";
         let params = format!(
             "symbol={}&period={}&size={}",
@@ -232,7 +233,7 @@ impl Huobi {
         Ok(klines)
     }
 
-    pub fn get_balance(&self, asset: &str) -> APIResult<Balance> {
+    pub fn get_balance_raw(&self, asset: &str) -> APIResult<Balance> {
         let uri = format!("/v1/account/accounts/{}/balance", self.account_id);
         let params: BTreeMap<String, String> = BTreeMap::new();
         let ret = self.get_signed(&uri, params)?;
@@ -258,7 +259,7 @@ impl Huobi {
         Ok(balance)
     }
 
-    pub fn create_order(
+    pub fn create_order_raw(
         &self,
         symbol: &str,
         price: f64,
@@ -283,7 +284,7 @@ impl Huobi {
         Ok(resp.data)
     }
 
-    pub fn cancel(&self, id: &str) -> APIResult<bool> {
+    pub fn cancel_raw(&self, id: &str) -> APIResult<bool> {
         let uri = format!("/v1/order/orders/{}/submitcancel", id);
         let params: BTreeMap<String, String> = BTreeMap::new();
         let body: BTreeMap<String, String> = BTreeMap::new();
@@ -296,7 +297,7 @@ impl Huobi {
         }
     }
 
-    pub fn cancel_all(&self, symbol: &str) -> APIResult<bool> {
+    pub fn cancel_all_raw(&self, symbol: &str) -> APIResult<bool> {
         let uri = "/v1/order/orders/batchCancelOpenOrders";
         let params: BTreeMap<String, String> = BTreeMap::new();
         let mut body: BTreeMap<String, String> = BTreeMap::new();
@@ -306,7 +307,7 @@ impl Huobi {
         Ok(true)
     }
 
-    pub fn get_order(&self, id: &str) -> APIResult<Order> {
+    pub fn get_order_raw(&self, id: &str) -> APIResult<Order> {
         let uri = format!("/v1/order/orders/{}", id);
         let params: BTreeMap<String, String> = BTreeMap::new();
         let ret = self.get_signed(&uri, params)?;
@@ -315,7 +316,7 @@ impl Huobi {
         Ok(resp.data.into())
     }
 
-    pub fn get_open_orders(&self, symbol: &str) -> APIResult<Vec<Order>> {
+    pub fn get_open_orders_raw(&self, symbol: &str) -> APIResult<Vec<Order>> {
         let uri = "/v1/order/openOrders";
         let mut params: BTreeMap<String, String> = BTreeMap::new();
         params.insert("account-id".into(), self.account_id.clone());
@@ -332,8 +333,75 @@ impl Huobi {
         Ok(orders)
     }
 
-    pub fn get_history_orders(&self, _symbol: &str) -> APIResult<Vec<Order>> {
+    pub fn get_history_orders_raw(&self, _symbol: &str) -> APIResult<Vec<Order>> {
         unimplemented!()
+    }
+}
+
+impl SpotRest for Huobi {
+    fn get_symbols(&self) -> APIResult<Vec<SymbolInfo>> {
+        let raw = self.get_symbols_raw()?;
+        Ok(raw.into())
+    }
+    
+    fn get_orderbook(&self, symbol: &str, depth: u8) -> APIResult<Orderbook> {
+        let raw = self.get_orderbook_raw(symbol, depth)?;
+        Ok(raw.into())
+    }
+
+    fn get_ticker(&self, symbol: &str) -> APIResult<Ticker> {
+        let raw = self.get_ticker_raw(symbol)?;
+        Ok(raw.into())
+    }
+
+    fn get_kline(&self, symbol: &str, period: &str, limit: u16) -> APIResult<Vec<Kline>> {
+        self.get_kline_raw(symbol, period, limit)
+    }
+
+    fn get_balance(&self, asset: &str) -> APIResult<Balance> {
+        self.get_balance_raw(asset)
+    }
+
+    fn create_order(
+        &self,
+        symbol: &str,
+        price: f64,
+        amount: f64,
+        action: &str,
+        order_type: &str,
+    ) -> APIResult<String> {
+        self.create_order_raw(symbol, price, amount, action, order_type)
+    }
+
+    fn cancel(&self, id: &str) -> APIResult<bool> {
+        self.cancel_raw(id)
+    }
+
+    fn cancel_all(&self, symbol: &str) -> APIResult<bool> {
+        self.cancel_all_raw(symbol)
+    }
+
+    fn get_order(&self, id: &str) -> APIResult<Order> {
+        let raw = self.get_order_raw(id)?;
+        Ok(raw.into())
+    }
+
+    fn get_open_orders(&self, symbol: &str) -> APIResult<Vec<Order>> {
+        let raw = self.get_open_orders_raw(symbol)?;
+        let orders = raw
+            .into_iter()
+            .map(|order| order.into())
+            .collect::<Vec<Order>>();
+        Ok(orders)
+    }
+
+    fn get_history_orders(&self, symbol: &str) -> APIResult<Vec<Order>> {
+        let raw = self.get_history_orders_raw(symbol)?;
+        let orders = raw
+            .into_iter()
+            .map(|order| order.into())
+            .collect::<Vec<Order>>();
+        Ok(orders)
     }
 }
 

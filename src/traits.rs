@@ -2,6 +2,7 @@ use crate::errors::*;
 use crate::models::*;
 
 pub trait SpotRest {
+    fn get_symbols(&self) -> APIResult<Vec<SymbolInfo>>;
     fn get_balance(&self, asset: &str) -> APIResult<Balance>;
     fn create_order(
         &self,
@@ -23,6 +24,7 @@ pub trait SpotRest {
 }
 
 pub trait FutureRest {
+
     fn get_balance(&self, asset: &str) -> APIResult<Balance>;
     fn create_order(
         &self,

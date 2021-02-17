@@ -200,7 +200,7 @@ impl Binance {
         }
     }
 
-    pub fn get_symbols(&self) -> APIResult<Vec<SymbolInfo>> {
+    pub fn get_symbols_raw(&self) -> APIResult<Vec<SymbolInfo>> {
         let uri = "/api/v3/exchangeInfo";
         let ret = self.get(uri, "")?;
         let resp: bn_types::ExchangeInfo = serde_json::from_str(&ret)?;
@@ -445,6 +445,11 @@ impl Binance {
 }
 
 impl SpotRest for Binance {
+    fn get_symbols(&self) -> APIResult<Vec<SymbolInfo>> {
+        let raw = self.get_symbols_raw()?;
+        Ok(raw.into())
+    }
+
     fn get_orderbook(&self, symbol: &str, depth: u8) -> APIResult<Orderbook> {
         let raw = self.get_orderbook_raw(symbol, depth)?;
         Ok(raw.into())
