@@ -5,6 +5,7 @@ use crate::traits::*;
 
 use log::{info, warn};
 use ws::{Handler, Handshake, Message, Result, Sender};
+use std::thread;
 
 //static WEBSOCKET_URL: &str = "wss://stream.binance.com:9443/ws/btcusdt@depth20";
 
@@ -53,13 +54,16 @@ impl<'a> BinanceWs<'a> {
     where
         Callback: FnMut(WsEvent) -> Result<()> + 'a,
     {
-        ws::connect(self.host.clone(), |out| BinanceWs {
+        info!("connect begin");
+        let res = ws::connect(self.host.clone(), |out| BinanceWs {
             host: self.host.clone(),
             subs: self.subs.clone(),
             out: Some(out),
             handler: Box::new(handler.clone()),
-        })
-        .unwrap();
+        });
+
+        info!("connect result: {:?}", res);
+        res.unwrap();
     }
 
     fn send(&self, msg: &str) {
@@ -135,6 +139,7 @@ impl<'a> SpotWs for BinanceWs<'a> {
             symbol.to_string().to_lowercase(),
             self.subs.len() + 1,
         );
+        info!("{:?}", msg);
         self.send(msg.as_str());
         self.subs.push(msg);
     }
@@ -147,11 +152,11 @@ impl<'a> SpotWs for BinanceWs<'a> {
 impl<'a> Handler for BinanceWs<'a> {
     fn on_open(&mut self, _shake: Handshake) -> Result<()> {
         match &self.out {
-            /*
+            // /*
             Some(out) => self.subs.iter().for_each(|s| {
                 let _ = out.send(s.as_str());
             }),
-            */
+            // */
             Some(_) => {
                 info!("ws connected");
             }
@@ -163,7 +168,7 @@ impl<'a> Handler for BinanceWs<'a> {
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
-        //println!("{:?}", msg);
+        // info!("{:?}", msg);
         match self.deseralize(&msg.to_string()) {
             Ok(event) => {
                 let _ = (self.handler)(event);

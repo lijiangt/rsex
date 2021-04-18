@@ -196,7 +196,7 @@ impl Binance {
                 "rate limit exceeded: 429".into(),
             ))),
             StatusCode::IM_A_TEAPOT => Err(Box::new(ExError::IpBanned("ip banned: 418".into()))),
-            s => Err(Box::new(ExError::ApiError(format!("response: {:?}", s)))),
+            s => Err(Box::new(ExError::ApiError(format!("response: {:?}, response text: {}", s, resp.text()?)))),
         }
     }
 
@@ -344,7 +344,7 @@ impl Binance {
         Ok(balances)
     }
 
-    pub fn create_order_raw(
+    pub fn create_order_raw_old(
         &self,
         symbol: &str,
         price: f64,
@@ -371,13 +371,78 @@ impl Binance {
         Ok(resp.order_id.to_string())
     }
 
-    pub fn cancel_raw(&self, id: &str) -> APIResult<bool> {
+    pub fn create_order_with_param(
+        &self,
+        params: BTreeMap<String, String>
+    ) -> APIResult<String> {
+        let uri = if self.is_margin {
+            MARGIN_URI.get("create_order").unwrap()
+        } else {
+            SPOT_URI.get("create_order").unwrap()
+        };
+        let req = self.build_signed_request(params)?;
+        let ret = self.post_signed(uri, &req)?;
+        let resp: bn_types::OrderResult = serde_json::from_str(&ret)?;
+        Ok(resp.order_id.to_string())
+    }
+
+    pub fn create_order_raw(
+        &self,
+        symbol: &str,
+        price: f64,
+        amount: f64,
+        action: &str,
+        order_type: &str,
+        client_order_id: &str,
+    ) -> APIResult<String> {
+        let mut params: BTreeMap<String, String> = BTreeMap::new();
+        params.insert("symbol".into(), symbol.into());
+        params.insert("side".into(), action.into());
+        params.insert("type".into(), order_type.into());
+        params.insert("timeInForce".into(), "GTC".into());
+        params.insert("quantity".into(), amount.to_string());
+        params.insert("price".into(), price.to_string());
+        if client_order_id.len()>0{
+            params.insert("newClientOrderId".into(), client_order_id.to_string());
+        }
+        self.create_order_with_param(params)
+    }
+
+    pub fn create_market_order_raw(
+        &self,
+        symbol: &str,
+        amount: f64,
+        action: &str,
+        client_order_id: &str,
+    ) -> APIResult<String> {
+        let uri = if self.is_margin {
+            MARGIN_URI.get("create_order").unwrap()
+        } else {
+            SPOT_URI.get("create_order").unwrap()
+        };
+        let mut params: BTreeMap<String, String> = BTreeMap::new();
+        params.insert("symbol".into(), symbol.into());
+        params.insert("side".into(), action.into());
+        params.insert("type".into(), String::from("MARKET"));
+        params.insert("quantity".into(), amount.to_string());
+        if client_order_id.len()>0{
+            params.insert("newClientOrderId".into(), client_order_id.to_string());
+        }
+        let req = self.build_signed_request(params)?;
+        let ret = self.post_signed(uri, &req)?;
+        let resp: bn_types::OrderResult = serde_json::from_str(&ret)?;
+
+        Ok(resp.order_id.to_string())
+    }
+
+    pub fn cancel_raw(&self, symbol: &str, id: &str) -> APIResult<bool> {
         let uri = if self.is_margin {
             MARGIN_URI.get("cancel").unwrap()
         } else {
             SPOT_URI.get("cancel").unwrap()
         };
         let mut params: BTreeMap<String, String> = BTreeMap::new();
+        params.insert("symbol".into(), symbol.into());
         params.insert("orderId".into(), id.into());
         let req = self.build_signed_request(params)?;
         let _ret = self.delete_signed(uri, &req)?;
@@ -397,14 +462,31 @@ impl Binance {
         Ok(true)
     }
 
-    pub fn get_order_raw(&self, id: &str) -> APIResult<bn_types::RawOrder> {
+    pub fn get_order_raw(&self, symbol: &str, id: &str) -> APIResult<bn_types::RawOrder> {
         let uri = if self.is_margin {
             MARGIN_URI.get("get_order").unwrap()
         } else {
             SPOT_URI.get("get_order").unwrap()
         };
         let mut params: BTreeMap<String, String> = BTreeMap::new();
+        params.insert("symbol".into(), symbol.into());
         params.insert("orderId".into(), id.into());
+        let req = self.build_signed_request(params)?;
+        let ret = self.get_signed(uri, &req)?;
+        let resp: bn_types::RawOrder = serde_json::from_str(&ret)?;
+
+        Ok(resp)
+    }
+
+    pub fn get_order_by_client_id_raw(&self, symbol: &str, client_order_id: &str) -> APIResult<bn_types::RawOrder> {
+        let uri = if self.is_margin {
+            MARGIN_URI.get("get_order").unwrap()
+        } else {
+            SPOT_URI.get("get_order").unwrap()
+        };
+        let mut params: BTreeMap<String, String> = BTreeMap::new();
+        params.insert("symbol".into(), symbol.into());
+        params.insert("origClientOrderId".into(), client_order_id.into());
         let req = self.build_signed_request(params)?;
         let ret = self.get_signed(uri, &req)?;
         let resp: bn_types::RawOrder = serde_json::from_str(&ret)?;
@@ -475,20 +557,42 @@ impl SpotRest for Binance {
         amount: f64,
         action: &str,
         order_type: &str,
+        client_order_id: &str,
     ) -> APIResult<String> {
-        self.create_order_raw(symbol, price, amount, action, order_type)
+        self.create_order_raw(symbol, price, amount, action, order_type, client_order_id)
     }
 
-    fn cancel(&self, id: &str) -> APIResult<bool> {
-        self.cancel_raw(id)
+    fn create_market_order(
+        &self,
+        symbol: &str,
+        amount: f64,
+        action: &str,
+        client_order_id: &str,
+    ) -> APIResult<String>{
+        self.create_market_order_raw(symbol, amount, action, client_order_id)
+    }
+
+    fn create_limit_order(
+        &self,
+        symbol: &str,
+        price: f64,
+        amount: f64,
+        action: &str,
+        client_order_id: &str,
+    ) -> APIResult<String>{
+        self.create_order_raw(symbol, 0.0, amount, action, "LIMIT", client_order_id)
+    }
+
+    fn cancel(&self, symbol: &str, id: &str) -> APIResult<bool> {
+        self.cancel_raw(symbol, id)
     }
 
     fn cancel_all(&self, symbol: &str) -> APIResult<bool> {
         self.cancel_all_raw(symbol)
     }
 
-    fn get_order(&self, id: &str) -> APIResult<Order> {
-        let raw = self.get_order_raw(id)?;
+    fn get_order(&self, symbol: &str, id: &str) -> APIResult<Order> {
+        let raw = self.get_order_raw(symbol, id)?;
         Ok(raw.into())
     }
 
@@ -508,6 +612,15 @@ impl SpotRest for Binance {
             .map(|order| order.into())
             .collect::<Vec<Order>>();
         Ok(orders)
+    }
+
+    fn get_symbol(&self, base_currency: &str, trade_currency: &str) -> String {
+        format!("{}{}", trade_currency, base_currency).to_uppercase()
+    }
+
+    fn get_order_by_client_id(&self, symbol: &str, client_order_id: &str) -> APIResult<Order> {
+        let raw = self.get_order_by_client_id_raw(symbol, client_order_id)?;
+        Ok(raw.into())
     }
 }
 

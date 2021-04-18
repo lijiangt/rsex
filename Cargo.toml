@@ -31,3 +31,4 @@ ring = "0.13.0-alpha"
 data-encoding = "2.1.2"
 reqwest = { version = "0.10", features = ["blocking", "json"] }
 url = "2.1"
+tungstenite = "0.13.0"

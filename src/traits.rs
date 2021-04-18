@@ -1,7 +1,11 @@
 use crate::errors::*;
 use crate::models::*;
 
+use log::{debug, error, log_enabled, info, Level};
+
+
 pub trait SpotRest {
+    fn get_symbol(&self, base_currency: &str, trade_currency: &str) -> String;
     fn get_symbols(&self) -> APIResult<Vec<SymbolInfo>>;
     fn get_balance(&self, asset: &str) -> APIResult<Balance>;
     fn create_order(
@@ -11,10 +15,100 @@ pub trait SpotRest {
         amount: f64,
         action: &str,
         order_type: &str,
+        client_order_id: &str,
     ) -> APIResult<String>;
-    fn cancel(&self, id: &str) -> APIResult<bool>;
+    fn create_market_order(
+        &self,
+        symbol: &str,
+        amount: f64,
+        action: &str,
+        client_order_id: &str,
+    ) -> APIResult<String>;
+    fn create_market_order_with_retry(
+        &self,
+        symbol: &str,
+        amount: f64,
+        action: &str,
+        client_order_id: &str,
+        retry_times: u8,
+    ) -> APIResult<String>{
+        let mut i:u8 = 0;
+        while i < retry_times{
+            i=i+1;
+            let ret = self.create_market_order(symbol,amount,action, client_order_id);
+            if let Err(error)=ret{
+                println!("create_market_order failed, client_order_id: {}, error: {:?}", client_order_id, error);
+                if i == retry_times{
+                    return Err(error);
+                }
+            }else{
+                return Ok(ret?.into());
+            }
+        }
+        panic!("create_market_order panic")
+    }
+
+    fn create_limit_order(
+        &self,
+        symbol: &str,
+        price: f64,
+        amount: f64,
+        action: &str,
+        client_order_id: &str,
+    ) -> APIResult<String>;
+    fn cancel(&self, symbol: &str, id: &str) -> APIResult<bool>;
     fn cancel_all(&self, symbol: &str) -> APIResult<bool>;
-    fn get_order(&self, id: &str) -> APIResult<Order>;
+    fn cancel_all_with_retry(&self, symbol: &str, retry_times: u8) -> APIResult<bool>{
+        let mut i:u8 = 0;
+        while i < retry_times{
+            i=i+1;
+            let ret = self.cancel_all(symbol);
+            if let Err(error)=ret{
+                println!("cancel_all_with_retry failed, error: {:?}", error);
+                if i == retry_times{
+                    return Err(error);
+                }
+            }else{
+                return Ok(ret?.into());
+            }
+        }
+        panic!("cancel_all_with_retry panic")
+    }
+    fn get_order(&self, symbol: &str, id: &str) -> APIResult<Order>;
+    fn get_order_with_retry(&self, symbol: &str, id: &str, retry_times: u8) -> APIResult<Order>{
+        let mut i:u8 = 0;
+        while i < retry_times{
+            i=i+1;
+            let ret = self.get_order(symbol, id);
+            if let Err(error)=ret{
+                error!("get_order_with_retry failed, order id: {}, error: {:?}", id, error);
+                if i == retry_times{
+                    return Err(error);
+                }
+            }else{
+                return Ok(ret?.into());
+            }
+        }
+        panic!("get_order_with_retry panic")
+    }
+
+    fn get_order_by_client_id(&self, symbol: &str, client_order_id: &str) -> APIResult<Order>;
+    fn get_order_by_client_id_with_retry(&self, symbol: &str, client_order_id: &str, retry_times: u8) -> APIResult<Order>{
+        let mut i:u8 = 0;
+        while i < retry_times{
+            i=i+1;
+            let ret = self.get_order_by_client_id(symbol, client_order_id);
+            if let Err(error)=ret{
+                error!("get_order_by_client_id_with_retry failed, client order id: {}, error: {:?}", client_order_id, error);
+                if i == retry_times{
+                    return Err(error);
+                }
+            }else{
+                return Ok(ret?.into());
+            }
+        }
+        panic!("get_order_by_client_id_with_retry panic")
+    }
     fn get_open_orders(&self, symbol: &str) -> APIResult<Vec<Order>>;
     fn get_history_orders(&self, symbol: &str) -> APIResult<Vec<Order>>;
 
