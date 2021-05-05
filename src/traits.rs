@@ -1,7 +1,7 @@
 use crate::errors::*;
 use crate::models::*;
 
-use log::{debug, error, log_enabled, info, Level};
+use log::{ error};
 
 
 pub trait SpotRest {
@@ -112,9 +112,12 @@ pub trait SpotRest {
     fn get_open_orders(&self, symbol: &str) -> APIResult<Vec<Order>>;
     fn get_history_orders(&self, symbol: &str) -> APIResult<Vec<Order>>;
 
-    fn get_orderbook(&self, symbol: &str, depth: u8) -> APIResult<Orderbook>;
+    fn get_orderbook(&self, symbol: &str, depth: u32) -> APIResult<Orderbook>;
     fn get_ticker(&self, symbol: &str) -> APIResult<Ticker>;
     fn get_kline(&self, symbol: &str, period: &str, limit: u16) -> APIResult<Vec<Kline>>;
+
+    fn query_buy_price(&self, symbol:&str, amount:f64) -> (f64, bool);
+    fn query_sell_price(&self, symbol:&str, amount:f64) -> (f64, bool);
 }
 
 pub trait FutureRest {
@@ -134,7 +137,7 @@ pub trait FutureRest {
     fn get_open_orders(&self, symbol: &str) -> APIResult<Vec<Order>>;
     fn get_history_orders(&self, symbol: &str) -> APIResult<Vec<Order>>;
 
-    fn get_orderbook(&self, symbol: &str, depth: u8) -> APIResult<Orderbook>;
+    fn get_orderbook(&self, symbol: &str, depth: u32) -> APIResult<Orderbook>;
     fn get_ticker(&self, symbol: &str) -> APIResult<Ticker>;
     fn get_kline(&self, symbol: &str, period: &str, limit: u16) -> APIResult<Vec<Kline>>;
 }

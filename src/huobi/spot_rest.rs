@@ -190,7 +190,7 @@ impl Huobi {
             .join("&")
     }
 
-    pub fn get_orderbook_raw(&self, symbol: &str, depth: u8) -> APIResult<Orderbook> {
+    pub fn get_orderbook_raw(&self, symbol: &str, depth: u32) -> APIResult<Orderbook> {
         let uri = "/market/depth";
         let symbol = symbol.to_lowercase();
         let params = format!("symbol={}&depth={}&type=step0", symbol, depth);
@@ -269,23 +269,23 @@ impl Huobi {
         let resp: Response<String> = serde_json::from_str(&ret)?;
         Ok(resp.data)
     }
-    fn create_market_order_raw(
-        &self,
-        symbol: &str,
-        amount: f64,
-        action: &str,
-    ) -> APIResult<String>{
-        unimplemented!()
-        // let mut body: BTreeMap<String, String> = BTreeMap::new();
-        // body.insert("account-id".into(), self.account_id.clone());
-        // body.insert("symbol".into(), symbol.to_string().to_lowercase());
-        // let body_type = action.to_string() + "-MARKET";
-        // let body_type = body_type.to_lowercase();
-        // body.insert("type".into(), body_type);
-        // body.insert("amount".into(), amount.to_string());
-        // body.insert("source".into(), self.account_type.clone() + "-api");
-        // self.create_order_with_body(body)
-    }
+    // fn create_market_order_raw(
+    //     &self,
+    //     _symbol: &str,
+    //     _amount: f64,
+    //     _action: &str,
+    // ) -> APIResult<String>{
+    //     unimplemented!()
+    //     // let mut body: BTreeMap<String, String> = BTreeMap::new();
+    //     // body.insert("account-id".into(), self.account_id.clone());
+    //     // body.insert("symbol".into(), symbol.to_string().to_lowercase());
+    //     // let body_type = action.to_string() + "-MARKET";
+    //     // let body_type = body_type.to_lowercase();
+    //     // body.insert("type".into(), body_type);
+    //     // body.insert("amount".into(), amount.to_string());
+    //     // body.insert("source".into(), self.account_type.clone() + "-api");
+    //     // self.create_order_with_body(body)
+    // }
 
     pub fn create_order_raw(
         &self,
@@ -405,7 +405,7 @@ impl SpotRest for Huobi {
         Ok(raw.into())
     }
     
-    fn get_orderbook(&self, symbol: &str, depth: u8) -> APIResult<Orderbook> {
+    fn get_orderbook(&self, symbol: &str, depth: u32) -> APIResult<Orderbook> {
         let raw = self.get_orderbook_raw(symbol, depth)?;
         Ok(raw.into())
     }
@@ -447,7 +447,7 @@ impl SpotRest for Huobi {
     fn create_limit_order(
         &self,
         symbol: &str,
-        price: f64,
+        _price: f64,
         amount: f64,
         action: &str,
         client_order_id: &str,
@@ -492,6 +492,14 @@ impl SpotRest for Huobi {
     fn get_order_by_client_id(&self, _symbol: &str, client_order_id: &str) -> APIResult<Order> {
         let raw = self.get_order_by_client_id_raw(client_order_id)?;
         Ok(raw.into())
+    }
+
+    fn query_buy_price(&self, _symbol: &str, _amount: f64) -> (f64, bool) {
+        todo!()
+    }
+
+    fn query_sell_price(&self, _symbol: &str, _amount: f64) -> (f64, bool) {
+        todo!()
     }
 }
 

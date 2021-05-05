@@ -12,6 +12,10 @@ use reqwest::StatusCode;
 use ring::{digest, hmac};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
+use std::thread;
+use crate::binance::spot_ws::{BinanceWs, LocalOrderBook};
+use log::{warn};
+
 
 lazy_static! {
     static ref SPOT_URI: HashMap::<&'static str, &'static str> = {
@@ -51,11 +55,16 @@ pub struct Binance {
 }
 
 impl Binance {
-    pub fn new(api_key: Option<String>, secret_key: Option<String>, host: String) -> Self {
+    pub fn init_local_orderbook(rest_host: String, steams_ws_url:String, symbols:Vec<String>){
+        thread::spawn(move || {
+            BinanceWs::build_local_orderbook(&steams_ws_url[..],&rest_host[..], symbols);
+        });
+    }
+    pub fn new(api_key: Option<String>, secret_key: Option<String>, rest_host: String) -> Self {
         Binance {
             api_key: api_key.unwrap_or_else(|| "".into()),
             secret_key: secret_key.unwrap_or_else(|| "".into()),
-            host,
+            host:rest_host,
             is_margin: false,
         }
     }
@@ -212,13 +221,14 @@ impl Binance {
         Ok(symbols)
     }
 
-    pub fn get_orderbook_raw(&self, symbol: &str, depth: u8) -> APIResult<bn_types::RawOrderbook> {
+    pub fn get_orderbook_raw(&self, symbol: &str, depth: u32) -> APIResult<bn_types::RawOrderbook> {
         let uri = if self.is_margin {
             MARGIN_URI.get("get_orderbook").unwrap()
         } else {
             SPOT_URI.get("get_orderbook").unwrap()
         };
-        let params = format!("symbol={}&limit={}", symbol, depth);
+        let params = format!("symbol={}&limit={}", symbol.to_ascii_uppercase(), depth);
+        // println!("{}", &params);
         let ret = self.get(uri, &params)?;
         let resp: bn_types::RawOrderbook = serde_json::from_str(&ret)?;
         Ok(resp)
@@ -532,7 +542,7 @@ impl SpotRest for Binance {
         Ok(raw.into())
     }
 
-    fn get_orderbook(&self, symbol: &str, depth: u8) -> APIResult<Orderbook> {
+    fn get_orderbook(&self, symbol: &str, depth: u32) -> APIResult<Orderbook> {
         let raw = self.get_orderbook_raw(symbol, depth)?;
         Ok(raw.into())
     }
@@ -575,7 +585,7 @@ impl SpotRest for Binance {
     fn create_limit_order(
         &self,
         symbol: &str,
-        price: f64,
+        _price: f64,
         amount: f64,
         action: &str,
         client_order_id: &str,
@@ -621,6 +631,40 @@ impl SpotRest for Binance {
     fn get_order_by_client_id(&self, symbol: &str, client_order_id: &str) -> APIResult<Order> {
         let raw = self.get_order_by_client_id_raw(symbol, client_order_id)?;
         Ok(raw.into())
+    }
+
+    fn query_buy_price(&self, symbol: &str, amount: f64) -> (f64, bool) {
+        loop {
+            let (price, from_ws) = LocalOrderBook::query_buy_price(symbol, amount);
+            if from_ws{
+                return (price, from_ws)
+            }
+            match self.get_ticker(symbol){
+                Ok(result) => {
+                    return (result.ask.price, false)
+                }
+                Err(error) => {
+                    warn!("query_buy_price get ticker failed, error: {}", error)
+                }
+            }
+        }
+    }
+
+    fn query_sell_price(&self, symbol: &str, amount: f64) -> (f64, bool) {
+        loop {
+            let (price, from_ws) = LocalOrderBook::query_sell_price(symbol, amount);
+            if from_ws{
+                return (price, from_ws)
+            }
+            match self.get_ticker(symbol){
+                Ok(result) => {
+                    return (result.bid.price, false)
+                }
+                Err(error) => {
+                    warn!("query_sell_price get ticker failed, error: {}", error)
+                }
+            }
+        }
     }
 }
 
